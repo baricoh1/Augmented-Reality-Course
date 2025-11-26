@@ -45,5 +45,6 @@ public class CubeJump : MonoBehaviour
         {
             isGrounded = true;
         }
+        UnityEngine.Debug.Log("message");
     }
 }
