@@ -1,38 +1,45 @@
 ﻿using UnityEngine;
 using UnityEngine.InputSystem;
 
-public class CubeRotate : MonoBehaviour
+public class CubeJump : MonoBehaviour
 {
-    public float rotationSpeed = 30f;
-    public float moveSpeed = 5f;
+    public float jumpForce = 5f;
+    private bool isGrounded = true;
+    private Rigidbody rb;
+
+    void Start()
+    {
+        // Get the Rigidbody component
+        rb = GetComponent<Rigidbody>();
+
+        // If the cube doesn't have a Rigidbody, add one
+        if (rb == null)
+        {
+            rb = gameObject.AddComponent<Rigidbody>();
+        }
+
+        // Make sure the Rigidbody uses gravity
+        rb.useGravity = true;
+    }
 
     void Update()
     {
-        // סיבוב קבוע
-        transform.Rotate(0, rotationSpeed * Time.deltaTime, 0);
-
-        if (Keyboard.current != null)
+        // Check for Space key with the new Input System
+        if (Keyboard.current != null && Keyboard.current.spaceKey.wasPressedThisFrame && isGrounded)
         {
-            Vector3 movement = Vector3.zero;
+            // Apply upward force
+            rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
+            isGrounded = false;
+        }
+    }
 
-            // W או חץ למעלה
-            if (Keyboard.current.wKey.isPressed || Keyboard.current.upArrowKey.isPressed)
-                movement.z = 1;
-
-            // S או חץ למטה
-            if (Keyboard.current.sKey.isPressed || Keyboard.current.downArrowKey.isPressed)
-                movement.z = -1;
-
-            // A או חץ שמאלה
-            if (Keyboard.current.aKey.isPressed || Keyboard.current.leftArrowKey.isPressed)
-                movement.x = -1;
-
-            // D או חץ ימינה
-            if (Keyboard.current.dKey.isPressed || Keyboard.current.rightArrowKey.isPressed)
-                movement.x = 1;
-
-            // הזזה בפועל
-            transform.Translate(movement * moveSpeed * Time.deltaTime);
+    // Detect when the cube hits the ground
+    void OnCollisionEnter(Collision collision)
+    {
+        // Check if the collision is with the ground
+        if (collision.gameObject.CompareTag("Ground") || collision.contacts[0].normal.y > 0.5f)
+        {
+            isGrounded = true;
         }
     }
 }
