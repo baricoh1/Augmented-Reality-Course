@@ -3,48 +3,55 @@ using UnityEngine.InputSystem;
 
 public class CubeJump : MonoBehaviour
 {
-    public float jumpForce = 5f;
-    public GameObject groundObject;  // הקרקע שאתה גורר מה-Inpector
+    public float jumpForce = 300f; // ערך ברירת מחדל חזק
+    public GameObject groundObject;
 
-    private bool isGrounded = true;
+    // הוספתי SerializeField כדי שתוכל לראות את ה-V הזה ב-Inspector בזמן משחק!
+    [SerializeField] private bool isGrounded = true;
     private Rigidbody rb;
 
     void Start()
     {
         rb = GetComponent<Rigidbody>();
-
-        if (rb == null)
-            rb = gameObject.AddComponent<Rigidbody>();
+        // הגנה: אם אין ריגידבודי, נוסיף אחד
+        if (rb == null) rb = gameObject.AddComponent<Rigidbody>();
 
         rb.useGravity = true;
+        // מוודא שהאילוצים לא נועלים את הקפיצה
+        rb.constraints = RigidbodyConstraints.FreezeRotation;
     }
 
     void Update()
     {
-        // SPACE – בדיקה עם Input System
-        if (Keyboard.current != null &&
-            Keyboard.current.spaceKey.wasPressedThisFrame &&
-            isGrounded)
+        // בדיקה האם המקלדת קיימת והמקש נלחץ
+        if (Keyboard.current != null && Keyboard.current.spaceKey.wasPressedThisFrame)
         {
-            rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
-            isGrounded = false;
+            if (isGrounded)
+            {
+                Debug.Log("JUMPING! Force applied."); // אם זה מודפס, הקוד עובד והבעיה בפיזיקה
+                rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
+                isGrounded = false;
+            }
+            else
+            {
+                Debug.Log("Can't jump - isGrounded is FALSE"); // תדע אם המחשב חושב שאתה באוויר
+            }
         }
     }
 
     void OnCollisionEnter(Collision collision)
     {
-        // בדיקה אם האובייקט שנגענו בו הוא הקרקע שהוגדרה
+        // בדיקה 1: לפי האובייקט שגררת
         if (groundObject != null && collision.gameObject == groundObject)
         {
             isGrounded = true;
+            Debug.Log("Landed on Ground Object");
         }
-
-        // אופציונלי: גם בדיקת משטח שטוח מתחת לקובייה
-        if (collision.contacts.Length > 0 &&
-            collision.contacts[0].normal.y > 0.5f)
+        // בדיקה 2: לפי הזווית (למקרה שלא גררת או שנגעת ברצפה אחרת)
+        else if (collision.contacts.Length > 0 && collision.contacts[0].normal.y > 0.5f)
         {
             isGrounded = true;
+            Debug.Log("Landed on Flat Surface");
         }
-        UnityEngine.Debug.Log("message");
     }
 }
