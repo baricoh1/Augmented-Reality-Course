@@ -134,6 +134,7 @@ GameObject:
   - component: {fileID: 318975286}
   - component: {fileID: 318975288}
   - component: {fileID: 318975289}
+  - component: {fileID: 318975290}
   m_Layer: 0
   m_Name: XR Origin
   m_TagString: Untagged
@@ -187,7 +188,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   legoModel: {fileID: 3534753881210118519, guid: eee6afbb85d1752469d58d85fa9d7a4c, type: 3}
-  distance: 0.5
+  raycastManager: {fileID: 318975290}
 --- !u!114 &318975289
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -202,6 +203,19 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   m_PlanePrefab: {fileID: 6970799456816372587, guid: 5346f7154f370b74d97221e986d3e9a1, type: 3}
   m_DetectionMode: 1
+--- !u!114 &318975290
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 318975285}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fa17d122634046b4a8e23048891fafc5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_RaycastPrefab: {fileID: 0}
 --- !u!1 &621005642
 GameObject:
   m_ObjectHideFlags: 0
