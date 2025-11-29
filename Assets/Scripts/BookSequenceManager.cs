@@ -8,9 +8,9 @@ public class BookSequenceManager : MonoBehaviour
     [System.Serializable]
     public struct Step
     {
-        public string stepName;         // שם השלב (לסדר בעיניים)
-        public GameObject sceneObject;  // האובייקט בסצנה
-        public float duration;          // כמה זמן להציג (שניות)
+        public string stepName;
+        public GameObject sceneObject;
+        public float duration;
 
         [Header("Step Adjustments")]
         public Vector3 positionOffset;
@@ -20,30 +20,24 @@ public class BookSequenceManager : MonoBehaviour
     [System.Serializable]
     public struct PageSequence
     {
-        public string imageName; // שם התמונה בספרייה (למשל Page1)
-        public List<Step> steps; // רשימת השלבים
+        public string imageName;
+        public List<Step> steps;
     }
 
     [Header("Setup")]
     public ARTrackedImageManager imageManager;
-
-    // --- התיקון כאן: מילה אחת בלבד ---
     public List<PageSequence> sequences;
 
     [Header("Debug")]
     public bool enableSimulation = true;
 
-    // ניהול הרצף הפעיל
     private Coroutine currentSequenceRoutine = null;
     private string currentActivePage = "";
-
-    // זיכרון לגדלים המקוריים
     private Dictionary<int, Vector3> _initialScales = new Dictionary<int, Vector3>();
     private Transform currentAnchor;
 
     void Awake()
     {
-        // מעבר על כל הדפים והשלבים לשמירת הגדלים וכיבוי האובייקטים
         foreach (var page in sequences)
         {
             foreach (var step in page.steps)
@@ -52,9 +46,7 @@ public class BookSequenceManager : MonoBehaviour
                 {
                     int id = step.sceneObject.GetInstanceID();
                     if (!_initialScales.ContainsKey(id))
-                    {
                         _initialScales.Add(id, step.sceneObject.transform.localScale);
-                    }
 
                     step.sceneObject.SetActive(false);
                 }
@@ -77,24 +69,16 @@ public class BookSequenceManager : MonoBehaviour
         foreach (var newImage in eventArgs.added)
         {
             string imageName = newImage.referenceImage.name;
-
-            // דף חדש זוהה
             if (imageName != currentActivePage)
-            {
                 StartSequenceForPage(imageName, newImage.transform);
-            }
             else
-            {
                 UpdateAnchorPosition(newImage.transform);
-            }
         }
 
         foreach (var updatedImage in eventArgs.updated)
         {
             if (updatedImage.referenceImage.name == currentActivePage)
-            {
                 UpdateAnchorPosition(updatedImage.transform);
-            }
         }
     }
 
@@ -105,10 +89,8 @@ public class BookSequenceManager : MonoBehaviour
 
     void StartSequenceForPage(string imageName, Transform anchor)
     {
-        // חיפוש הרצף המתאים לדף
         PageSequence selectedPage = sequences.Find(p => p.imageName == imageName);
 
-        // אם מצאנו רצף כזה ויש בו שלבים
         if (selectedPage.steps != null && selectedPage.steps.Count > 0)
         {
             if (currentSequenceRoutine != null) StopCoroutine(currentSequenceRoutine);
@@ -132,11 +114,9 @@ public class BookSequenceManager : MonoBehaviour
             {
                 // 1. הפעלה
                 model.SetActive(true);
+                if (currentAnchor != null) model.transform.SetParent(currentAnchor, false);
 
-                if (currentAnchor != null)
-                    model.transform.SetParent(currentAnchor, false);
-
-                // 2. מיקום וסיבוב
+                // 2. איפוס מיקום וזווית (פעם אחת בהתחלה)
                 model.transform.localPosition = currentStep.positionOffset;
                 model.transform.localRotation = Quaternion.Euler(currentStep.rotationOffset);
 
@@ -146,7 +126,15 @@ public class BookSequenceManager : MonoBehaviour
 
                 Debug.Log($"[Sequence] Showing: {currentStep.stepName}");
 
-                // 4. המתנה (הצגת המודל)
+                // --- חיבור לסקריפט הסיבוב שלך ---
+                ARObjectRotator rotator = model.GetComponent<ARObjectRotator>();
+                if (rotator == null)
+                {
+                    // בדיקת בטיחות: אם שכחת לשים את הסקריפט על המודל
+                    Debug.LogWarning($"[Sequence] Warning: Object {model.name} is missing 'ARObjectRotator' script!");
+                }
+
+                // 4. לולאת הזמן (כאן אנחנו מחכים)
                 float timer = 0;
                 while (timer < currentStep.duration)
                 {
@@ -154,13 +142,28 @@ public class BookSequenceManager : MonoBehaviour
                     if (currentAnchor != null && model.transform.parent != currentAnchor)
                         model.transform.SetParent(currentAnchor, false);
 
-                    timer += Time.deltaTime;
+                    // --- בדיקת אינטראקציה ---
+                    bool isUserTouching = (rotator != null && rotator.IsDragging);
+
+                    if (isUserTouching)
+                    {
+                        // אם המשתמש גורר:
+                        // אנחנו לא עושים כלום! לא מקדמים את הטיימר.
+                        // הסיבוב קורה אוטומטית בתוך הסקריפט ARObjectRotator דרך ה-Update שלו.
+                        // Debug.Log("User is rotating... Pausing timer.");
+                    }
+                    else
+                    {
+                        // אם המשתמש לא גורר:
+                        // מקדמים את הטיימר כדי להגיע לשלב הבא
+                        timer += Time.deltaTime;
+                    }
+
                     yield return null;
                 }
 
-                // 5. אפקט יציאה (Fade Out)
+                // 5. סיום השלב (Fade Out)
                 yield return StartCoroutine(FadeOutModel(model));
-
                 model.SetActive(false);
             }
         }
@@ -183,11 +186,9 @@ public class BookSequenceManager : MonoBehaviour
         }
     }
 
-    // --- סימולציה ---
     IEnumerator SimulateScan()
     {
         yield return new WaitForSeconds(2f);
-
         GameObject fakePage = GameObject.CreatePrimitive(PrimitiveType.Quad);
         fakePage.name = "SIMULATED_PAGE";
         if (Camera.main)
@@ -195,7 +196,6 @@ public class BookSequenceManager : MonoBehaviour
             fakePage.transform.position = Camera.main.transform.position + Camera.main.transform.forward * 1f;
             fakePage.transform.rotation = Quaternion.Euler(60, 0, 0);
         }
-
         if (sequences.Count > 0)
             StartSequenceForPage(sequences[0].imageName, fakePage.transform);
     }
