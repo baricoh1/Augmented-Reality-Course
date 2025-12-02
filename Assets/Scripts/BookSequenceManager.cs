@@ -28,13 +28,21 @@ public class BookSequenceManager : MonoBehaviour
     public ARTrackedImageManager imageManager;
     public List<PageSequence> sequences;
 
-    [Header("Debug")]
-    public bool enableSimulation = true;
+    [Header("Cage Settings (The Prison)")]
+    [Tooltip("המרחק המקסימלי מהמרכז שמותר לאובייקט לזוז (במטרים)")]
+    public Vector3 cageLimits = new Vector3(0.1f, 0.05f, 0.15f);
+    // X=0.1 (10 ס"מ לצדדים)
+    // Y=0.05 (מקסימום 5 ס"מ גובה - שומר שלא ירחף גבוה מידי)
+    // Z=0.15 (15 ס"מ למעלה/למטה על הדף)
 
     private Coroutine currentSequenceRoutine = null;
     private string currentActivePage = "";
     private Dictionary<int, Vector3> _initialScales = new Dictionary<int, Vector3>();
-    private Transform currentAnchor;
+
+    // משתנים למנגנון הנעילה
+    private GameObject _activeLockedModel = null;
+    private Transform _activeAnchor = null;
+    private Vector3 _targetLocalPos;
 
     void Awake()
     {
@@ -54,13 +62,6 @@ public class BookSequenceManager : MonoBehaviour
         }
     }
 
-    void Start()
-    {
-#if UNITY_EDITOR
-        if (enableSimulation) StartCoroutine(SimulateScan());
-#endif
-    }
-
     void OnEnable() => imageManager.trackedImagesChanged += OnImageChanged;
     void OnDisable() => imageManager.trackedImagesChanged -= OnImageChanged;
 
@@ -72,19 +73,37 @@ public class BookSequenceManager : MonoBehaviour
             if (imageName != currentActivePage)
                 StartSequenceForPage(imageName, newImage.transform);
             else
-                UpdateAnchorPosition(newImage.transform);
+                _activeAnchor = newImage.transform;
         }
 
         foreach (var updatedImage in eventArgs.updated)
         {
             if (updatedImage.referenceImage.name == currentActivePage)
-                UpdateAnchorPosition(updatedImage.transform);
+                _activeAnchor = updatedImage.transform;
         }
     }
 
-    void UpdateAnchorPosition(Transform anchor)
+    // --- מנגנון הכלוב ב-LateUpdate ---
+    void LateUpdate()
     {
-        currentAnchor = anchor;
+        if (_activeLockedModel != null && _activeAnchor != null)
+        {
+            // 1. ווידוא היררכיה
+            if (_activeLockedModel.transform.parent != _activeAnchor)
+                _activeLockedModel.transform.SetParent(_activeAnchor, false);
+
+            // 2. חישוב המיקום הרצוי
+            Vector3 desiredPos = _targetLocalPos;
+
+            // 3. הפעלת הכלוב (Clamping)
+            // אנחנו מכריחים את המיקום להישאר בתוך הגבולות שהגדרת
+            desiredPos.x = Mathf.Clamp(desiredPos.x, -cageLimits.x, cageLimits.x);
+            desiredPos.y = Mathf.Clamp(desiredPos.y, 0f, cageLimits.y); // לא נותנים לו לרדת מתחת לדף (0)
+            desiredPos.z = Mathf.Clamp(desiredPos.z, -cageLimits.z, cageLimits.z);
+
+            // 4. יישום המיקום הסופי
+            _activeLockedModel.transform.localPosition = desiredPos;
+        }
     }
 
     void StartSequenceForPage(string imageName, Transform anchor)
@@ -96,15 +115,13 @@ public class BookSequenceManager : MonoBehaviour
             if (currentSequenceRoutine != null) StopCoroutine(currentSequenceRoutine);
 
             currentActivePage = imageName;
-            currentAnchor = anchor;
+            _activeAnchor = anchor;
             currentSequenceRoutine = StartCoroutine(RunStepsRoutine(selectedPage));
         }
     }
 
     IEnumerator RunStepsRoutine(PageSequence pageData)
     {
-        Debug.Log($"[Sequence] Starting sequence for {pageData.imageName}");
-
         for (int i = 0; i < pageData.steps.Count; i++)
         {
             Step currentStep = pageData.steps[i];
@@ -112,63 +129,39 @@ public class BookSequenceManager : MonoBehaviour
 
             if (model != null)
             {
-                // 1. הפעלה
                 model.SetActive(true);
-                if (currentAnchor != null) model.transform.SetParent(currentAnchor, false);
+                Rigidbody rb = model.GetComponent<Rigidbody>();
+                if (rb != null) rb.isKinematic = true;
 
-                // 2. איפוס מיקום וזווית (פעם אחת בהתחלה)
+                _activeLockedModel = model;
+                _targetLocalPos = currentStep.positionOffset;
+
+                model.transform.SetParent(_activeAnchor, false);
                 model.transform.localPosition = currentStep.positionOffset;
                 model.transform.localRotation = Quaternion.Euler(currentStep.rotationOffset);
 
-                // 3. שחזור גודל
                 if (_initialScales.TryGetValue(model.GetInstanceID(), out Vector3 savedScale))
                     model.transform.localScale = savedScale;
 
-                Debug.Log($"[Sequence] Showing: {currentStep.stepName}");
-
-                // --- חיבור לסקריפט הסיבוב שלך ---
                 ARObjectRotator rotator = model.GetComponent<ARObjectRotator>();
-                if (rotator == null)
-                {
-                    // בדיקת בטיחות: אם שכחת לשים את הסקריפט על המודל
-                    Debug.LogWarning($"[Sequence] Warning: Object {model.name} is missing 'ARObjectRotator' script!");
-                }
-
-                // 4. לולאת הזמן (כאן אנחנו מחכים)
                 float timer = 0;
+
                 while (timer < currentStep.duration)
                 {
-                    // מוודאים הצמדה לדף
-                    if (currentAnchor != null && model.transform.parent != currentAnchor)
-                        model.transform.SetParent(currentAnchor, false);
-
-                    // --- בדיקת אינטראקציה ---
                     bool isUserTouching = (rotator != null && rotator.IsDragging);
-
-                    if (isUserTouching)
+                    if (!isUserTouching)
                     {
-                        // אם המשתמש גורר:
-                        // אנחנו לא עושים כלום! לא מקדמים את הטיימר.
-                        // הסיבוב קורה אוטומטית בתוך הסקריפט ARObjectRotator דרך ה-Update שלו.
-                        // Debug.Log("User is rotating... Pausing timer.");
-                    }
-                    else
-                    {
-                        // אם המשתמש לא גורר:
-                        // מקדמים את הטיימר כדי להגיע לשלב הבא
                         timer += Time.deltaTime;
                     }
-
                     yield return null;
                 }
 
-                // 5. סיום השלב (Fade Out)
+                _activeLockedModel = null;
+
                 yield return StartCoroutine(FadeOutModel(model));
                 model.SetActive(false);
             }
         }
-
-        Debug.Log("[Sequence] Finished all steps.");
         currentActivePage = "";
     }
 
@@ -177,26 +170,11 @@ public class BookSequenceManager : MonoBehaviour
         Vector3 originalScale = model.transform.localScale;
         float fadeTime = 0.5f;
         float t = 0;
-
         while (t < 1)
         {
             t += Time.deltaTime / fadeTime;
             model.transform.localScale = Vector3.Lerp(originalScale, Vector3.zero, t);
             yield return null;
         }
-    }
-
-    IEnumerator SimulateScan()
-    {
-        yield return new WaitForSeconds(2f);
-        GameObject fakePage = GameObject.CreatePrimitive(PrimitiveType.Quad);
-        fakePage.name = "SIMULATED_PAGE";
-        if (Camera.main)
-        {
-            fakePage.transform.position = Camera.main.transform.position + Camera.main.transform.forward * 1f;
-            fakePage.transform.rotation = Quaternion.Euler(60, 0, 0);
-        }
-        if (sequences.Count > 0)
-            StartSequenceForPage(sequences[0].imageName, fakePage.transform);
     }
 }
