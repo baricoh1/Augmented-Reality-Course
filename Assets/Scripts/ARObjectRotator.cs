@@ -4,7 +4,6 @@ public class ARObjectRotator : MonoBehaviour
 {
     [Header("Settings")]
     public float rotationSpeed = 1f;
-    public bool rotateAroundYOnly = true;
 
     [Header("Safe Feel Settings")]
     public float sensitivity = 2f;
@@ -19,15 +18,18 @@ public class ARObjectRotator : MonoBehaviour
     void Start()
     {
         _mainCamera = Camera.main;
-        // בדיקות תקינות שנשארו מהקוד המקורי שלך - מצוין
-        if (_mainCamera == null) Debug.LogError("!!! CRITICAL ERROR: No camera tagged 'MainCamera' found! !!!");
-        if (GetComponent<Collider>() == null) Debug.LogError($"!!! Object '{name}' has NO COLLIDER! !!!");
+        if (_mainCamera == null) Debug.LogError("!!! ERROR: Camera not found. Make sure your AR Camera is tagged as 'MainCamera' !!!");
+
+        // בדיקה שהקוליידר קיים
+        if (GetComponent<Collider>() == null)
+            Debug.LogError($"!!! ERROR: Object '{name}' has NO COLLIDER! The script won't work without it. !!!");
     }
 
     void Update()
     {
         if (Input.GetMouseButtonDown(0))
         {
+            // בדיקת פגיעה ראשונית
             CheckWhatDidWeHit(Input.mousePosition);
         }
         else if (Input.GetMouseButton(0) && _isDragging)
@@ -42,6 +44,7 @@ public class ARObjectRotator : MonoBehaviour
         }
         else if (Input.GetMouseButtonUp(0))
         {
+            if (_isDragging) Debug.Log("Stopped Dragging");
             _currentSmoothDelta = Vector2.zero;
             _isDragging = false;
         }
@@ -50,22 +53,37 @@ public class ARObjectRotator : MonoBehaviour
     void CheckWhatDidWeHit(Vector2 screenPos)
     {
         Ray ray = _mainCamera.ScreenPointToRay(screenPos);
+
+        // משתמשים ב-RaycastAll כדי לראות אם פגענו במשהו, גם אם הוא מאחורי הרצפה
         if (Physics.Raycast(ray, out RaycastHit hit))
         {
+            Debug.Log("Raycast hit: " + hit.transform.name); // <--- שורה חשובה לדיבוג
+
+            // האם פגענו באובייקט הזה (האבא) או באחד הילדים שלו?
             if (hit.transform == transform || hit.transform.IsChildOf(transform))
             {
+                Debug.Log("SUCCESS! Started Dragging " + name);
                 _isDragging = true;
             }
+            else
+            {
+                Debug.Log("Ignored hit on: " + hit.transform.name + " (Not me)");
+            }
+        }
+        else
+        {
+            Debug.Log("Raycast hit nothing.");
         }
     }
 
     void RotateObject(Vector2 delta)
     {
-        // --- השינוי הגדול: Space.Self ---
-        float xRot = rotateAroundYOnly ? 0 : delta.y * rotationSpeed;
+        // סיבוב ימינה/שמאלה - ביחס לעולם (שומר על המודל ישר)
         float yRot = -delta.x * rotationSpeed;
+        transform.Rotate(Vector3.up, yRot, Space.World);
 
-        // מסובבים ביחס לעצמנו (כלומר ביחס לדף שעליו אנחנו יושבים)
-        transform.Rotate(xRot, yRot, 0f, Space.Self);
+        // סיבוב למעלה/למטה - ביחס לאובייקט (מטה אותו אליך)
+        float xRot = delta.y * rotationSpeed;
+        transform.Rotate(Vector3.right, xRot, Space.Self);
     }
 }
