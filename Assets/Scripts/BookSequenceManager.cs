@@ -171,30 +171,50 @@ public class BookSequenceManager : MonoBehaviour
         if (activeScanEffect != null) Destroy(activeScanEffect);
     }
 
-    // --- הפונקציה הפשוטה (בלי אנימציות) ---
+    // --- הפונקציה הפשוטה + אפקט גדילה (Pop In) ---
     IEnumerator RunLayoutSimple(GameObject layoutPrefab)
     {
-        // יצירה
+        // 1. יצירה
         GameObject layoutObj = Instantiate(layoutPrefab, _activeAnchor);
 
-        // הדלקה ואיתחול מיקום
+        // אתחול: מפעילים אותו, אבל מקטינים לאפס כדי שנוכל להגדיל
         layoutObj.SetActive(true);
         layoutObj.transform.localPosition = Vector3.zero;
         layoutObj.transform.localRotation = Quaternion.identity;
-        layoutObj.transform.localScale = Vector3.one; // וודא שגודל האבא הוא 1
+        layoutObj.transform.localScale = Vector3.zero; // התחלה בגודל 0
 
-        // הדלקת כל הילדים ליתר ביטחון
+        // הדלקת כל הילדים
         foreach (Transform child in layoutObj.transform)
         {
             child.gameObject.SetActive(true);
-            // אם במקרה שמרת אותם בגודל 0, נתקן ל-1
+            // אם במקרה שמרת ילדים בגודל 0, נתקן ל-1 כדי שיראו אותם כשהאבא יגדל
             if (child.localScale == Vector3.zero) child.localScale = Vector3.one;
         }
 
-        // פשוט מחכים - בלי לולאות ובלי שינויי גודל
+        // 2. אנימציית גדילה (Pop In) - כל השולחן גדל ביחד
+        float t = 0;
+        while (t < 1)
+        {
+            t += Time.deltaTime * 3; // מהירות הגדילה (יותר גבוה = יותר מהר)
+            // שימוש ב-Lerp כדי לגדול מ-0 ל-1 בצורה חלקה
+            layoutObj.transform.localScale = Vector3.Lerp(Vector3.zero, Vector3.one, t);
+            yield return null;
+        }
+        layoutObj.transform.localScale = Vector3.one; // וידוא גודל סופי
+
+        // 3. המתנה
         yield return new WaitForSeconds(displayDuration);
 
-        // מחיקה מידית (בלי פייד אאוט כרגע, כדי למנוע סיבוכים)
+        // 4. אנימציית כיווץ (Pop Out) - אופציונלי, נראה יפה
+        t = 0;
+        while (t < 1)
+        {
+            t += Time.deltaTime * 3;
+            layoutObj.transform.localScale = Vector3.Lerp(Vector3.one, Vector3.zero, t);
+            yield return null;
+        }
+
+        // 5. מחיקה
         Destroy(layoutObj);
     }
 
