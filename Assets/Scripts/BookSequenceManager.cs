@@ -5,6 +5,8 @@ using UnityEngine.XR.ARFoundation;
 
 public class BookSequenceManager : MonoBehaviour
 {
+    // --- מבני נתונים ---
+
     [System.Serializable]
     public struct Step
     {
@@ -12,7 +14,7 @@ public class BookSequenceManager : MonoBehaviour
         public GameObject sceneObject;
         public float duration;
 
-        [Header("Step Adjustments")]
+        [Header("Positioning")]
         public Vector3 positionOffset;
         public Vector3 rotationOffset;
     }
@@ -21,29 +23,39 @@ public class BookSequenceManager : MonoBehaviour
     public struct PageSequence
     {
         public string imageName;
+
+        [Header("Session Layout")]
+        public GameObject partsLayoutPrefab;
+
         public List<Step> steps;
     }
 
-    [Header("Setup")]
+    // --- הגדרות ---
+
+    [Header("AR Setup")]
     public ARTrackedImageManager imageManager;
     public List<PageSequence> sequences;
 
-    [Header("Scanning Effect Settings (NEW)")]
-    public GameObject scanningVisualPrefab; // <--- גרור לפה את הפריפאב של הגריד/סורק
-    public float scanDuration = 2.5f;       // <--- כמה זמן הסריקה תימשך
+    [Header("Phase 1: Scanning Effect")]
+    public GameObject scanningVisualPrefab;
+    public float scanDuration = 2.5f;
 
-    [Header("Cage Settings (The Prison)")]
-    [Tooltip("המרחק המקסימלי מהמרכז שמותר לאובייקט לזוז (במטרים)")]
+    [Header("Phase 2: Workbench (Simple Mode)")]
+    public float displayDuration = 3.0f; // כמה זמן להציג את החלקים
+
+    [Header("Interaction Settings")]
     public Vector3 cageLimits = new Vector3(0.1f, 0.05f, 0.15f);
+
+    // --- משתנים פרטיים ---
 
     private Coroutine currentSequenceRoutine = null;
     private string currentActivePage = "";
     private Dictionary<int, Vector3> _initialScales = new Dictionary<int, Vector3>();
-
-    // משתנים למנגנון הנעילה
     private GameObject _activeLockedModel = null;
     private Transform _activeAnchor = null;
     private Vector3 _targetLocalPos;
+
+    // --- Unity Methods ---
 
     void Awake()
     {
@@ -66,25 +78,6 @@ public class BookSequenceManager : MonoBehaviour
     void OnEnable() => imageManager.trackedImagesChanged += OnImageChanged;
     void OnDisable() => imageManager.trackedImagesChanged -= OnImageChanged;
 
-    private void OnImageChanged(ARTrackedImagesChangedEventArgs eventArgs)
-    {
-        foreach (var newImage in eventArgs.added)
-        {
-            string imageName = newImage.referenceImage.name;
-            // אם זו תמונה חדשה שלא מוצגת כרגע - נתחיל את רצף הסריקה
-            if (imageName != currentActivePage)
-                StartSequenceForPage(imageName, newImage.transform);
-            else
-                _activeAnchor = newImage.transform;
-        }
-
-        foreach (var updatedImage in eventArgs.updated)
-        {
-            if (updatedImage.referenceImage.name == currentActivePage)
-                _activeAnchor = updatedImage.transform;
-        }
-    }
-
     void LateUpdate()
     {
         if (_activeLockedModel != null && _activeAnchor != null)
@@ -101,81 +94,111 @@ public class BookSequenceManager : MonoBehaviour
         }
     }
 
+    private void OnImageChanged(ARTrackedImagesChangedEventArgs eventArgs)
+    {
+        foreach (var newImage in eventArgs.added)
+        {
+            string imageName = newImage.referenceImage.name;
+            if (imageName != currentActivePage)
+                StartSequenceForPage(imageName, newImage.transform);
+            else
+                _activeAnchor = newImage.transform;
+        }
+
+        foreach (var updatedImage in eventArgs.updated)
+        {
+            if (updatedImage.referenceImage.name == currentActivePage)
+                _activeAnchor = updatedImage.transform;
+        }
+    }
+
     void StartSequenceForPage(string imageName, Transform anchor)
     {
         PageSequence selectedPage = sequences.Find(p => p.imageName == imageName);
 
-        // בדוק אם יש דף כזה ואם יש לו צעדים
-        if (selectedPage.steps != null && selectedPage.steps.Count > 0)
+        if (!string.IsNullOrEmpty(selectedPage.imageName))
         {
             if (currentSequenceRoutine != null) StopCoroutine(currentSequenceRoutine);
-
             currentActivePage = imageName;
             _activeAnchor = anchor;
-
-            // --- שינוי: במקום להריץ ישר את הצעדים, מריצים את הסריקה קודם ---
-            currentSequenceRoutine = StartCoroutine(RunScanAndThenSteps(selectedPage));
+            currentSequenceRoutine = StartCoroutine(MainFlowRoutine(selectedPage));
         }
     }
 
-    // --- פונקציה חדשה: קודם סורק, אחר כך מציג תוכן ---
-    IEnumerator RunScanAndThenSteps(PageSequence pageData)
-    {
-        // שלב 1: הצגת אפקט הסריקה (הגריד)
-        GameObject activeScanEffect = null;
+    // --- Main Logic ---
 
+    IEnumerator MainFlowRoutine(PageSequence pageData)
+    {
+        // 1. סריקה
+        yield return StartCoroutine(RunScanningEffect());
+
+        // 2. הצגת שולחן העבודה (ללא אנימציה - רק הצגה)
+        if (pageData.partsLayoutPrefab != null)
+        {
+            yield return StartCoroutine(RunLayoutSimple(pageData.partsLayoutPrefab));
+        }
+
+        // 3. שלבי הבנייה
+        yield return StartCoroutine(RunStepsLogic(pageData));
+    }
+
+    IEnumerator RunScanningEffect()
+    {
+        GameObject activeScanEffect = null;
         if (scanningVisualPrefab != null && _activeAnchor != null)
         {
-            // יוצרים את הגריד על הדף המזוהה
             activeScanEffect = Instantiate(scanningVisualPrefab, _activeAnchor);
-
-            // --- הגדרות מיקום וסיבוב (כמו שביקשת) ---
+            activeScanEffect.SetActive(true);
             activeScanEffect.transform.localPosition = Vector3.zero;
             activeScanEffect.transform.localRotation = Quaternion.Euler(90, 0, 0);
 
-            // --- אנימציית הגדילה (Scale) ---
-
-            // 1. שומרים את הגודל המקורי שקבעת בפריפאב (המטרה)
             Vector3 targetScale = activeScanEffect.transform.localScale;
-
-            // 2. קובעים מצב התחלה: גובה 0 (סגור)
-            // אנחנו מאפסים את ה-Y כדי שזה יתחיל כפס דק
             activeScanEffect.transform.localScale = new Vector3(targetScale.x, 0f, targetScale.z);
 
-            // 3. לולאת האנימציה (נפתח לאט)
             float timer = 0;
             while (timer < scanDuration)
             {
                 timer += Time.deltaTime;
-                float progress = timer / scanDuration; // מספר בין 0 ל-1
-
-                // חישוב הגובה החדש
+                float progress = timer / scanDuration;
                 float currentY = Mathf.Lerp(0f, targetScale.y, progress);
-
-                // עדכון הגודל בפועל (שומרים על X ו-Z, משנים רק את Y)
                 activeScanEffect.transform.localScale = new Vector3(targetScale.x, currentY, targetScale.z);
-
                 yield return null;
             }
-
-            // וידוא שהגענו לגודל הסופי
             activeScanEffect.transform.localScale = targetScale;
         }
 
-        // המתנה קצרה כדי שיראו את הגריד המלא לרגע
         yield return new WaitForSeconds(0.2f);
-
-        // שלב 2: מחיקת הגריד
-        if (activeScanEffect != null)
-        {
-            Destroy(activeScanEffect);
-        }
-
-        // שלב 3: הפעלת הלוגיקה המקורית (הרובוט)
-        yield return StartCoroutine(RunStepsRoutine(pageData));
+        if (activeScanEffect != null) Destroy(activeScanEffect);
     }
 
-    IEnumerator RunStepsRoutine(PageSequence pageData)
+    // --- הפונקציה הפשוטה (בלי אנימציות) ---
+    IEnumerator RunLayoutSimple(GameObject layoutPrefab)
+    {
+        // יצירה
+        GameObject layoutObj = Instantiate(layoutPrefab, _activeAnchor);
+
+        // הדלקה ואיתחול מיקום
+        layoutObj.SetActive(true);
+        layoutObj.transform.localPosition = Vector3.zero;
+        layoutObj.transform.localRotation = Quaternion.identity;
+        layoutObj.transform.localScale = Vector3.one; // וודא שגודל האבא הוא 1
+
+        // הדלקת כל הילדים ליתר ביטחון
+        foreach (Transform child in layoutObj.transform)
+        {
+            child.gameObject.SetActive(true);
+            // אם במקרה שמרת אותם בגודל 0, נתקן ל-1
+            if (child.localScale == Vector3.zero) child.localScale = Vector3.one;
+        }
+
+        // פשוט מחכים - בלי לולאות ובלי שינויי גודל
+        yield return new WaitForSeconds(displayDuration);
+
+        // מחיקה מידית (בלי פייד אאוט כרגע, כדי למנוע סיבוכים)
+        Destroy(layoutObj);
+    }
+
+    IEnumerator RunStepsLogic(PageSequence pageData)
     {
         for (int i = 0; i < pageData.steps.Count; i++)
         {
@@ -204,15 +227,11 @@ public class BookSequenceManager : MonoBehaviour
                 while (timer < currentStep.duration)
                 {
                     bool isUserTouching = (rotator != null && rotator.IsDragging);
-                    if (!isUserTouching)
-                    {
-                        timer += Time.deltaTime;
-                    }
+                    if (!isUserTouching) timer += Time.deltaTime;
                     yield return null;
                 }
 
                 _activeLockedModel = null;
-
                 yield return StartCoroutine(FadeOutModel(model));
                 model.SetActive(false);
             }
@@ -223,11 +242,10 @@ public class BookSequenceManager : MonoBehaviour
     IEnumerator FadeOutModel(GameObject model)
     {
         Vector3 originalScale = model.transform.localScale;
-        float fadeTime = 0.5f;
         float t = 0;
         while (t < 1)
         {
-            t += Time.deltaTime / fadeTime;
+            t += Time.deltaTime / 0.5f;
             model.transform.localScale = Vector3.Lerp(originalScale, Vector3.zero, t);
             yield return null;
         }
