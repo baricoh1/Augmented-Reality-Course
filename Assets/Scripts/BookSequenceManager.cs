@@ -28,12 +28,13 @@ public class BookSequenceManager : MonoBehaviour
     public ARTrackedImageManager imageManager;
     public List<PageSequence> sequences;
 
+    [Header("Scanning Effect Settings (NEW)")]
+    public GameObject scanningVisualPrefab; // <--- גרור לפה את הפריפאב של הגריד/סורק
+    public float scanDuration = 2.5f;       // <--- כמה זמן הסריקה תימשך
+
     [Header("Cage Settings (The Prison)")]
     [Tooltip("המרחק המקסימלי מהמרכז שמותר לאובייקט לזוז (במטרים)")]
     public Vector3 cageLimits = new Vector3(0.1f, 0.05f, 0.15f);
-    // X=0.1 (10 ס"מ לצדדים)
-    // Y=0.05 (מקסימום 5 ס"מ גובה - שומר שלא ירחף גבוה מידי)
-    // Z=0.15 (15 ס"מ למעלה/למטה על הדף)
 
     private Coroutine currentSequenceRoutine = null;
     private string currentActivePage = "";
@@ -70,6 +71,7 @@ public class BookSequenceManager : MonoBehaviour
         foreach (var newImage in eventArgs.added)
         {
             string imageName = newImage.referenceImage.name;
+            // אם זו תמונה חדשה שלא מוצגת כרגע - נתחיל את רצף הסריקה
             if (imageName != currentActivePage)
                 StartSequenceForPage(imageName, newImage.transform);
             else
@@ -83,25 +85,18 @@ public class BookSequenceManager : MonoBehaviour
         }
     }
 
-    // --- מנגנון הכלוב ב-LateUpdate ---
     void LateUpdate()
     {
         if (_activeLockedModel != null && _activeAnchor != null)
         {
-            // 1. ווידוא היררכיה
             if (_activeLockedModel.transform.parent != _activeAnchor)
                 _activeLockedModel.transform.SetParent(_activeAnchor, false);
 
-            // 2. חישוב המיקום הרצוי
             Vector3 desiredPos = _targetLocalPos;
-
-            // 3. הפעלת הכלוב (Clamping)
-            // אנחנו מכריחים את המיקום להישאר בתוך הגבולות שהגדרת
             desiredPos.x = Mathf.Clamp(desiredPos.x, -cageLimits.x, cageLimits.x);
-            desiredPos.y = Mathf.Clamp(desiredPos.y, 0f, cageLimits.y); // לא נותנים לו לרדת מתחת לדף (0)
+            desiredPos.y = Mathf.Clamp(desiredPos.y, 0f, cageLimits.y);
             desiredPos.z = Mathf.Clamp(desiredPos.z, -cageLimits.z, cageLimits.z);
 
-            // 4. יישום המיקום הסופי
             _activeLockedModel.transform.localPosition = desiredPos;
         }
     }
@@ -110,14 +105,74 @@ public class BookSequenceManager : MonoBehaviour
     {
         PageSequence selectedPage = sequences.Find(p => p.imageName == imageName);
 
+        // בדוק אם יש דף כזה ואם יש לו צעדים
         if (selectedPage.steps != null && selectedPage.steps.Count > 0)
         {
             if (currentSequenceRoutine != null) StopCoroutine(currentSequenceRoutine);
 
             currentActivePage = imageName;
             _activeAnchor = anchor;
-            currentSequenceRoutine = StartCoroutine(RunStepsRoutine(selectedPage));
+
+            // --- שינוי: במקום להריץ ישר את הצעדים, מריצים את הסריקה קודם ---
+            currentSequenceRoutine = StartCoroutine(RunScanAndThenSteps(selectedPage));
         }
+    }
+
+    // --- פונקציה חדשה: קודם סורק, אחר כך מציג תוכן ---
+    IEnumerator RunScanAndThenSteps(PageSequence pageData)
+    {
+        // שלב 1: הצגת אפקט הסריקה (הגריד)
+        GameObject activeScanEffect = null;
+
+        if (scanningVisualPrefab != null && _activeAnchor != null)
+        {
+            // יוצרים את הגריד על הדף המזוהה
+            activeScanEffect = Instantiate(scanningVisualPrefab, _activeAnchor);
+
+            // --- הגדרות מיקום וסיבוב (כמו שביקשת) ---
+            activeScanEffect.transform.localPosition = Vector3.zero;
+            activeScanEffect.transform.localRotation = Quaternion.Euler(90, 0, 0);
+
+            // --- אנימציית הגדילה (Scale) ---
+
+            // 1. שומרים את הגודל המקורי שקבעת בפריפאב (המטרה)
+            Vector3 targetScale = activeScanEffect.transform.localScale;
+
+            // 2. קובעים מצב התחלה: גובה 0 (סגור)
+            // אנחנו מאפסים את ה-Y כדי שזה יתחיל כפס דק
+            activeScanEffect.transform.localScale = new Vector3(targetScale.x, 0f, targetScale.z);
+
+            // 3. לולאת האנימציה (נפתח לאט)
+            float timer = 0;
+            while (timer < scanDuration)
+            {
+                timer += Time.deltaTime;
+                float progress = timer / scanDuration; // מספר בין 0 ל-1
+
+                // חישוב הגובה החדש
+                float currentY = Mathf.Lerp(0f, targetScale.y, progress);
+
+                // עדכון הגודל בפועל (שומרים על X ו-Z, משנים רק את Y)
+                activeScanEffect.transform.localScale = new Vector3(targetScale.x, currentY, targetScale.z);
+
+                yield return null;
+            }
+
+            // וידוא שהגענו לגודל הסופי
+            activeScanEffect.transform.localScale = targetScale;
+        }
+
+        // המתנה קצרה כדי שיראו את הגריד המלא לרגע
+        yield return new WaitForSeconds(0.2f);
+
+        // שלב 2: מחיקת הגריד
+        if (activeScanEffect != null)
+        {
+            Destroy(activeScanEffect);
+        }
+
+        // שלב 3: הפעלת הלוגיקה המקורית (הרובוט)
+        yield return StartCoroutine(RunStepsRoutine(pageData));
     }
 
     IEnumerator RunStepsRoutine(PageSequence pageData)
