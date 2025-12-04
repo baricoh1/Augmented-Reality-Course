@@ -10,8 +10,6 @@ GameObject:
   m_Component:
   - component: {fileID: 6902133691865973529}
   - component: {fileID: 7504537623144062507}
-  - component: {fileID: 967230761677558421}
-  - component: {fileID: 5576665977370227010}
   m_Layer: 0
   m_Name: Step_04_Assembly
   m_TagString: Untagged
@@ -60,43 +58,6 @@ Animator:
   m_AllowConstantClipSamplingOptimization: 1
   m_KeepAnimatorStateOnDisable: 0
   m_WriteDefaultValuesOnDisable: 0
---- !u!114 &967230761677558421
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 742456518392092268}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: fc25cde4898d5394db6eb302c57adc88, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  rotationSpeed: 0.5
-  rotateAroundYOnly: 0
-  sensitivity: 1
-  heaviness: 3
---- !u!65 &5576665977370227010
-BoxCollider:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 742456518392092268}
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_IsTrigger: 0
-  m_ProvidesContacts: 0
-  m_Enabled: 1
-  serializedVersion: 3
-  m_Size: {x: 143.4911, y: 195.82993, z: 235.8508}
-  m_Center: {x: -33.63076, y: -19.727951, z: 10.823807}
 --- !u!1001 &873349156308488638
 PrefabInstance:
   m_ObjectHideFlags: 0
