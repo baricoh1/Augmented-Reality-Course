@@ -177,35 +177,58 @@ public class BookSequenceManager : MonoBehaviour
         // 1. יצירה
         GameObject layoutObj = Instantiate(layoutPrefab, _activeAnchor);
 
-        // אתחול: מפעילים אותו, אבל מקטינים לאפס כדי שנוכל להגדיל
+        // אתחול ראשוני
         layoutObj.SetActive(true);
         layoutObj.transform.localPosition = Vector3.zero;
         layoutObj.transform.localRotation = Quaternion.identity;
-        layoutObj.transform.localScale = Vector3.zero; // התחלה בגודל 0
+        layoutObj.transform.localScale = Vector3.zero; // מתחילים מקטן
 
-        // הדלקת כל הילדים
+        // --- שלב א': ביטול הגרביטציה ---
+        // אנחנו תופסים את כל ה-Rigidbodies ומוודאים שהגרביטציה כבויה
+        // ככה הם "ירחפו" באוויר בזמן הגדילה
+        Rigidbody[] allRbs = layoutObj.GetComponentsInChildren<Rigidbody>();
+        foreach (var rb in allRbs)
+        {
+            rb.useGravity = false; // מכבה גרביטציה
+            rb.velocity = Vector3.zero; // מאפס מהירות ליתר ביטחון
+        }
+
+        // הדלקת הילדים (Visuals)
         foreach (Transform child in layoutObj.transform)
         {
             child.gameObject.SetActive(true);
-            // אם במקרה שמרת ילדים בגודל 0, נתקן ל-1 כדי שיראו אותם כשהאבא יגדל
             if (child.localScale == Vector3.zero) child.localScale = Vector3.one;
         }
 
-        // 2. אנימציית גדילה (Pop In) - כל השולחן גדל ביחד
+        // 2. אנימציית גדילה (Pop In)
         float t = 0;
         while (t < 1)
         {
-            t += Time.deltaTime * 3; // מהירות הגדילה (יותר גבוה = יותר מהר)
-            // שימוש ב-Lerp כדי לגדול מ-0 ל-1 בצורה חלקה
+            t += Time.deltaTime * 3;
             layoutObj.transform.localScale = Vector3.Lerp(Vector3.zero, Vector3.one, t);
             yield return null;
         }
         layoutObj.transform.localScale = Vector3.one; // וידוא גודל סופי
 
-        // 3. המתנה
+        // --- שלב ב': הפעלת הגרביטציה (הנפילה!) ---
+        // האנימציה נגמרה, עכשיו מפילים אותם
+        foreach (var rb in allRbs)
+        {
+            rb.useGravity = true; // מפעיל גרביטציה
+            rb.WakeUp(); // מנער את המנוע הפיזיקלי שיתחיל לעבוד
+        }
+
+        // 3. המתנה שהמשתמש יסתכל על החלקים
         yield return new WaitForSeconds(displayDuration);
 
-        // 4. אנימציית כיווץ (Pop Out) - אופציונלי, נראה יפה
+        // 4. אנימציית כיווץ (Pop Out)
+        // מכבים שוב גרביטציה כדי שלא יזוזו בזמן שהם נעלמים
+        foreach (var rb in allRbs)
+        {
+            rb.useGravity = false;
+            rb.isKinematic = true; // מקפיא אותם במקום שלא ייפלו דרך הרצפה בזמן ההקטנה
+        }
+
         t = 0;
         while (t < 1)
         {
