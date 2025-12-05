@@ -3,9 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.XR.ARFoundation;
 using UnityEngine.UI;
-using TMPro; 
-
-
+using TMPro;
 
 public class BookSequenceManager : MonoBehaviour
 {
@@ -41,13 +39,12 @@ public class BookSequenceManager : MonoBehaviour
     public GameObject scanningVisualPrefab;
     public float scanDuration = 3.0f;
 
-
     [Header("Interaction Settings")]
     public Vector3 cageLimits = new Vector3(0.1f, 0.05f, 0.15f);
 
     [Header("UI")]
     public TMP_Text statusText;
-    public TypewriterEffect typewriter; 
+    public TypewriterEffect typewriter;
 
     // --- Private Fields ---
     private Coroutine currentSequenceRoutine = null;
@@ -58,6 +55,9 @@ public class BookSequenceManager : MonoBehaviour
     private Vector3 _targetLocalPos;
     private bool _nextRequested = false;
     private bool _backRequested = false;
+
+    // לעקוב אחרי אינדקס הדף ברשימת sequences
+    private int _currentPageIndex = -1;
 
     void Awake()
     {
@@ -116,23 +116,33 @@ public class BookSequenceManager : MonoBehaviour
 
     void StartSequenceForPage(string imageName, Transform anchor)
     {
-        PageSequence selectedPage = sequences.Find(p => p.imageName == imageName);
+        // משתמשים ב-FindIndex ושומרים אינדקס
+        int pageIndex = sequences.FindIndex(p => p.imageName == imageName);
+        if (pageIndex < 0) return;
+
+        PageSequence selectedPage = sequences[pageIndex];
 
         if (!string.IsNullOrEmpty(selectedPage.imageName))
         {
             if (currentSequenceRoutine != null) StopCoroutine(currentSequenceRoutine);
+
+            _currentPageIndex = pageIndex;
             currentActivePage = imageName;
             _activeAnchor = anchor;
-            currentSequenceRoutine = StartCoroutine(MainFlowRoutine(selectedPage));
+            // 👇 פעם ראשונה לדף הזה – עם סריקה
+            currentSequenceRoutine = StartCoroutine(MainFlowRoutine(selectedPage, true));
         }
     }
 
     // --- Main Flow ---
-    IEnumerator MainFlowRoutine(PageSequence pageData)
+    IEnumerator MainFlowRoutine(PageSequence pageData, bool doScan)
     {
-        yield return StartCoroutine(RunScanningEffect());
+        if (doScan)
+            yield return StartCoroutine(RunScanningEffect());
+
         if (pageData.partsLayoutPrefab != null)
             yield return StartCoroutine(RunLayoutSimple(pageData.partsLayoutPrefab));
+
         yield return StartCoroutine(RunStepsLogic(pageData));
     }
 
@@ -190,10 +200,11 @@ public class BookSequenceManager : MonoBehaviour
     // Layout spawn + grow/fall effect
     IEnumerator RunLayoutSimple(GameObject layoutPrefab)
     {
-
+        // כותרת הדף לפי אינדקס נוכחי
         if (typewriter != null)
         {
-            typewriter.WriteText("חלקים נדרשים עבור דף 1");
+            int pageNumber = (_currentPageIndex >= 0 ? _currentPageIndex + 1 : 1);
+            typewriter.WriteText("חלקים נדרשים עבור דף " + pageNumber);
         }
 
         GameObject layoutObj = Instantiate(layoutPrefab, _activeAnchor);
@@ -263,7 +274,6 @@ public class BookSequenceManager : MonoBehaviour
             {
                 typewriter.WriteText("שלב " + (index + 1));
             }
-            // ----------------------------------
 
             Step currentStep = pageData.steps[index];
             GameObject model = currentStep.sceneObject;
@@ -310,9 +320,41 @@ public class BookSequenceManager : MonoBehaviour
             }
         }
 
-        // ניקוי בסוף
-        if (typewriter != null) typewriter.WriteText("");
-        currentActivePage = "";
+        // --- סוף דף: בדיקה אם יש דף הבא ---
+        if (typewriter != null)
+            typewriter.WriteText("סיימת את דף " + (_currentPageIndex + 1));
+
+        if (_currentPageIndex >= 0 && _currentPageIndex < sequences.Count - 1)
+        {
+            if (statusText != null)
+            {
+                statusText.text = "";
+                statusText.text = "לחץ המשך לדף הבא";
+            }
+
+            _nextRequested = false;
+
+            // מחכים שהמשתמש ילחץ על כפתור 'המשך'
+            while (!_nextRequested)
+                yield return null;
+
+            // מעבר לדף הבא
+            _currentPageIndex++;
+            PageSequence nextPage = sequences[_currentPageIndex];
+
+            currentActivePage = nextPage.imageName;
+            // 👇 כאן עוברים לדף הבא *בלי* סריקה
+            currentSequenceRoutine = StartCoroutine(MainFlowRoutine(nextPage, false));
+
+            yield break; // מסיים את RunStepsLogic לדף הנוכחי
+        }
+        else
+        {
+            // אין דף נוסף – סיום מוחלט
+            if (typewriter != null) typewriter.WriteText("");
+            currentActivePage = "";
+            if (statusText != null) statusText.text = "";
+        }
     }
 
     IEnumerator FadeOutModel(GameObject model)
