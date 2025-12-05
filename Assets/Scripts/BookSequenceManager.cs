@@ -15,7 +15,6 @@ public class BookSequenceManager : MonoBehaviour
     {
         public string stepName;
         public GameObject sceneObject;
-        public float duration;
 
         [Header("Positioning")]
         public Vector3 positionOffset;
@@ -40,16 +39,15 @@ public class BookSequenceManager : MonoBehaviour
 
     [Header("Phase 1: Scanning Effect")]
     public GameObject scanningVisualPrefab;
-    public float scanDuration = 2.5f;
+    public float scanDuration = 3.0f;
 
-    [Header("Phase 2: Workbench")]
-    public float displayDuration = 3.0f;
 
     [Header("Interaction Settings")]
     public Vector3 cageLimits = new Vector3(0.1f, 0.05f, 0.15f);
 
     [Header("UI")]
     public TMP_Text statusText;
+    public TypewriterEffect typewriter; 
 
     // --- Private Fields ---
     private Coroutine currentSequenceRoutine = null;
@@ -170,6 +168,7 @@ public class BookSequenceManager : MonoBehaviour
                 {
                     int dotCount = (int)(timer * 3f) % 4; // 0..3
                     string dots = new string('.', dotCount);
+                    if (typewriter != null) typewriter.WriteText("");
                     statusText.text = "סורק" + dots;
                 }
 
@@ -191,6 +190,12 @@ public class BookSequenceManager : MonoBehaviour
     // Layout spawn + grow/fall effect
     IEnumerator RunLayoutSimple(GameObject layoutPrefab)
     {
+
+        if (typewriter != null)
+        {
+            typewriter.WriteText("חלקים נדרשים עבור דף 1");
+        }
+
         GameObject layoutObj = Instantiate(layoutPrefab, _activeAnchor);
 
         layoutObj.SetActive(true);
@@ -254,6 +259,12 @@ public class BookSequenceManager : MonoBehaviour
 
         while (index < pageData.steps.Count)
         {
+            if (typewriter != null)
+            {
+                typewriter.WriteText("שלב " + (index + 1));
+            }
+            // ----------------------------------
+
             Step currentStep = pageData.steps[index];
             GameObject model = currentStep.sceneObject;
 
@@ -299,6 +310,8 @@ public class BookSequenceManager : MonoBehaviour
             }
         }
 
+        // ניקוי בסוף
+        if (typewriter != null) typewriter.WriteText("");
         currentActivePage = "";
     }
 
