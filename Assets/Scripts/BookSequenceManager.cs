@@ -5,9 +5,9 @@ using UnityEngine.XR.ARFoundation;
 
 public class BookSequenceManager : MonoBehaviour
 {
-    // --- מבני נתונים ---
+    // --- מבני נתונים ---
 
-    [System.Serializable]
+    [System.Serializable]
     public struct Step
     {
         public string stepName;
@@ -30,9 +30,9 @@ public class BookSequenceManager : MonoBehaviour
         public List<Step> steps;
     }
 
-    // --- הגדרות ---
+    // --- הגדרות ---
 
-    [Header("AR Setup")]
+    [Header("AR Setup")]
     public ARTrackedImageManager imageManager;
     public List<PageSequence> sequences;
 
@@ -43,21 +43,21 @@ public class BookSequenceManager : MonoBehaviour
     [Header("Phase 2: Workbench (Simple Mode)")]
     public float displayDuration = 3.0f; // כמה זמן להציג את החלקים
 
-    [Header("Interaction Settings")]
+    [Header("Interaction Settings")]
     public Vector3 cageLimits = new Vector3(0.1f, 0.05f, 0.15f);
 
-    // --- משתנים פרטיים ---
+    // --- משתנים פרטיים ---
 
-    private Coroutine currentSequenceRoutine = null;
+    private Coroutine currentSequenceRoutine = null;
     private string currentActivePage = "";
     private Dictionary<int, Vector3> _initialScales = new Dictionary<int, Vector3>();
     private GameObject _activeLockedModel = null;
     private Transform _activeAnchor = null;
     private Vector3 _targetLocalPos;
 
-    // --- Unity Methods ---
+    // --- Unity Methods ---
 
-    void Awake()
+    void Awake()
     {
         foreach (var page in sequences)
         {
@@ -125,21 +125,21 @@ public class BookSequenceManager : MonoBehaviour
         }
     }
 
-    // --- Main Logic ---
+    // --- Main Logic ---
 
-    IEnumerator MainFlowRoutine(PageSequence pageData)
+    IEnumerator MainFlowRoutine(PageSequence pageData)
     {
-        // 1. סריקה
-        yield return StartCoroutine(RunScanningEffect());
+        // 1. סריקה
+        yield return StartCoroutine(RunScanningEffect());
 
-        // 2. הצגת שולחן העבודה (ללא אנימציה - רק הצגה)
-        if (pageData.partsLayoutPrefab != null)
+        // 2. הצגת שולחן העבודה (ללא אנימציה - רק הצגה)
+        if (pageData.partsLayoutPrefab != null)
         {
             yield return StartCoroutine(RunLayoutSimple(pageData.partsLayoutPrefab));
         }
 
-        // 3. שלבי הבנייה
-        yield return StartCoroutine(RunStepsLogic(pageData));
+        // 3. שלבי הבנייה
+        yield return StartCoroutine(RunStepsLogic(pageData));
     }
 
     IEnumerator RunScanningEffect()
@@ -171,37 +171,37 @@ public class BookSequenceManager : MonoBehaviour
         if (activeScanEffect != null) Destroy(activeScanEffect);
     }
 
-    // --- הפונקציה הפשוטה + אפקט גדילה (Pop In) ---
-    IEnumerator RunLayoutSimple(GameObject layoutPrefab)
+    // --- הפונקציה הפשוטה + אפקט גדילה (Pop In) ---
+    IEnumerator RunLayoutSimple(GameObject layoutPrefab)
     {
-        // 1. יצירה
-        GameObject layoutObj = Instantiate(layoutPrefab, _activeAnchor);
+        // 1. יצירה
+        GameObject layoutObj = Instantiate(layoutPrefab, _activeAnchor);
 
-        // אתחול ראשוני
-        layoutObj.SetActive(true);
+        // אתחול ראשוני
+        layoutObj.SetActive(true);
         layoutObj.transform.localPosition = Vector3.zero;
         layoutObj.transform.localRotation = Quaternion.identity;
         layoutObj.transform.localScale = Vector3.zero; // מתחילים מקטן
 
-        // --- שלב א': ביטול הגרביטציה ---
-        // אנחנו תופסים את כל ה-Rigidbodies ומוודאים שהגרביטציה כבויה
-        // ככה הם "ירחפו" באוויר בזמן הגדילה
-        Rigidbody[] allRbs = layoutObj.GetComponentsInChildren<Rigidbody>();
+        // --- שלב א': ביטול הגרביטציה ---
+        // אנחנו תופסים את כל ה-Rigidbodies ומוודאים שהגרביטציה כבויה
+        // ככה הם "ירחפו" באוויר בזמן הגדילה
+        Rigidbody[] allRbs = layoutObj.GetComponentsInChildren<Rigidbody>();
         foreach (var rb in allRbs)
         {
             rb.useGravity = false; // מכבה גרביטציה
-            rb.velocity = Vector3.zero; // מאפס מהירות ליתר ביטחון
-        }
+            rb.velocity = Vector3.zero; // מאפס מהירות ליתר ביטחון
+        }
 
-        // הדלקת הילדים (Visuals)
-        foreach (Transform child in layoutObj.transform)
+        // הדלקת הילדים (Visuals)
+        foreach (Transform child in layoutObj.transform)
         {
             child.gameObject.SetActive(true);
             if (child.localScale == Vector3.zero) child.localScale = Vector3.one;
         }
 
-        // 2. אנימציית גדילה (Pop In)
-        float t = 0;
+        // 2. אנימציית גדילה (Pop In)
+        float t = 0;
         while (t < 1)
         {
             t += Time.deltaTime * 3;
@@ -210,24 +210,24 @@ public class BookSequenceManager : MonoBehaviour
         }
         layoutObj.transform.localScale = Vector3.one; // וידוא גודל סופי
 
-        // --- שלב ב': הפעלת הגרביטציה (הנפילה!) ---
-        // האנימציה נגמרה, עכשיו מפילים אותם
-        foreach (var rb in allRbs)
+        // --- שלב ב': הפעלת הגרביטציה (הנפילה!) ---
+        // האנימציה נגמרה, עכשיו מפילים אותם
+        foreach (var rb in allRbs)
         {
             rb.useGravity = true; // מפעיל גרביטציה
-            rb.WakeUp(); // מנער את המנוע הפיזיקלי שיתחיל לעבוד
-        }
+            rb.WakeUp(); // מנער את המנוע הפיזיקלי שיתחיל לעבוד
+        }
 
-        // 3. המתנה שהמשתמש יסתכל על החלקים
-        yield return new WaitForSeconds(displayDuration);
+        // 3. המתנה שהמשתמש יסתכל על החלקים
+        yield return new WaitForSeconds(displayDuration);
 
-        // 4. אנימציית כיווץ (Pop Out)
-        // מכבים שוב גרביטציה כדי שלא יזוזו בזמן שהם נעלמים
-        foreach (var rb in allRbs)
+        // 4. אנימציית כיווץ (Pop Out)
+        // מכבים שוב גרביטציה כדי שלא יזוזו בזמן שהם נעלמים
+        foreach (var rb in allRbs)
         {
             rb.useGravity = false;
             rb.isKinematic = true; // מקפיא אותם במקום שלא ייפלו דרך הרצפה בזמן ההקטנה
-        }
+        }
 
         t = 0;
         while (t < 1)
@@ -237,8 +237,8 @@ public class BookSequenceManager : MonoBehaviour
             yield return null;
         }
 
-        // 5. מחיקה
-        Destroy(layoutObj);
+        // 5. מחיקה
+        Destroy(layoutObj);
     }
 
     IEnumerator RunStepsLogic(PageSequence pageData)
