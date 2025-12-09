@@ -30,6 +30,14 @@ public class BookSequenceManager : MonoBehaviour
         public List<Step> steps;
     }
 
+    [Header("Test Drive")]
+    public Racecar racecar;   // רפרנס אמיתי לסקריפט
+
+    [Header("Controls UI")]
+    public GameObject arrowRightUI;
+    public GameObject arrowLeftUI;
+
+
     // --- Settings ---
     [Header("AR Setup")]
     public ARTrackedImageManager imageManager;
@@ -309,10 +317,21 @@ public class BookSequenceManager : MonoBehaviour
                 }
 
                 _activeLockedModel = null;
-                yield return StartCoroutine(FadeOutModel(model));
-                model.SetActive(false);
+
+                // האם זה הדף האחרון בחוברת?
+                bool isLastPage = (_currentPageIndex == sequences.Count - 1);
+                // האם זה השלב האחרון בדף הנוכחי?
+                bool isLastStepOnPage = (index == pageData.steps.Count - 1);
+
+                // אם זה *לא* גם הדף האחרון *וגם* השלב האחרון – מעלימים את המודל
+                if (!(isLastPage && isLastStepOnPage))
+                {
+                    yield return StartCoroutine(FadeOutModel(model));
+                    model.SetActive(false);
+                }
 
                 index++;
+
             }
             else
             {
@@ -322,16 +341,10 @@ public class BookSequenceManager : MonoBehaviour
 
         // --- סוף דף: בדיקה אם יש דף הבא ---
         if (typewriter != null)
-            typewriter.WriteText("סיימת את דף " + (_currentPageIndex + 1));
+            typewriter.WriteText("סיימת את דף " + (_currentPageIndex + 1) + "\nלחץ המשך לדף הבא");
 
         if (_currentPageIndex >= 0 && _currentPageIndex < sequences.Count - 1)
         {
-            if (statusText != null)
-            {
-                statusText.text = "";
-                statusText.text = "לחץ המשך לדף הבא";
-            }
-
             _nextRequested = false;
 
             // מחכים שהמשתמש ילחץ על כפתור 'המשך'
@@ -343,18 +356,36 @@ public class BookSequenceManager : MonoBehaviour
             PageSequence nextPage = sequences[_currentPageIndex];
 
             currentActivePage = nextPage.imageName;
-            // 👇 כאן עוברים לדף הבא *בלי* סריקה
             currentSequenceRoutine = StartCoroutine(MainFlowRoutine(nextPage, false));
 
-            yield break; // מסיים את RunStepsLogic לדף הנוכחי
+            yield break;
         }
+
         else
         {
             // אין דף נוסף – סיום מוחלט
-            if (typewriter != null) typewriter.WriteText("");
             currentActivePage = "";
-            if (statusText != null) statusText.text = "";
+
+            if (typewriter != null)
+                typewriter.WriteText("סיימת! , לחץ המשך לנסיעת מבחן");
+
+
+            // מחכים ללחיצה על כפתור 'המשך'
+            _nextRequested = false;
+            while (!_nextRequested)
+                yield return null;
+
+            // --- החלפת UI לשליטה בנהיגה ---
+            if (arrowLeftUI != null) arrowLeftUI.SetActive(false);
+            if (arrowRightUI != null) arrowRightUI.SetActive(false);
+
+            // --- הפעלת נסיעת המבחן ---
+            if (racecar != null)
+                racecar.StartTestDrive();
+
         }
+
+
     }
 
     IEnumerator FadeOutModel(GameObject model)
