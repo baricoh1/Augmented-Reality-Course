@@ -2,20 +2,23 @@
 
 public class Racecar : MonoBehaviour
 {
+    // --- TAG FOR DEBUGGING ---
+    // הוספתי צבע צהוב כדי שיהיה קל לזהות
+    private const string TAG = "<color=yellow>[RaceCar]</color> ";
+
     [Header("Drive Settings")]
-    public float driveSpeed = 0.2f;   // מהירות קדימה/אחורה
-    public float turnSpeed = 80f;    // מהירות סיבוב
+    public float driveSpeed = 0.2f;
+    public float turnSpeed = 80f;
 
     [Header("Car Root")]
-    public Transform carRoot;         // האובייקט של הרכב (או ה-Root שלו)
+    public Transform carRoot;
 
     [Header("UI")]
-    public GameObject joystickUI;     // פאנל הג'ויסטיק / החצים
+    public GameObject joystickUI;
 
-    // מצב
     private bool isDriving = false;
 
-    // דגלי קלט מהכפתורים
+    // Inputs
     private bool moveForward = false;
     private bool moveBackward = false;
     private bool turnLeft = false;
@@ -24,15 +27,27 @@ public class Racecar : MonoBehaviour
 
     void Update()
     {
-        if (!isDriving || carRoot == null)
+        if (!isDriving) return;
+
+        if (carRoot == null)
+        {
+            Debug.LogError(TAG + "❌ Error: carRoot is NULL!");
             return;
+        }
 
         // --- תנועה ---
         if (moveForward)
+        {
+            // שורה זו תראה לך אם הוא אשכרה מנסה לזוז בתוך ה-Update
+            Debug.Log(TAG + "Update Loop: Moving Forward...");
             carRoot.Translate(Vector3.forward * driveSpeed * Time.deltaTime, Space.Self);
+        }
 
         if (moveBackward)
+        {
+            Debug.Log(TAG + "Update Loop: Moving Backward...");
             carRoot.Translate(Vector3.back * driveSpeed * Time.deltaTime, Space.Self);
+        }
 
         // --- סיבוב ---
         if (turnLeft)
@@ -42,26 +57,72 @@ public class Racecar : MonoBehaviour
             carRoot.Rotate(Vector3.up, turnSpeed * Time.deltaTime, Space.Self);
     }
 
-    // נקרא מ-BookSequenceManager בסוף הבנייה
     public void StartTestDrive()
     {
+        // 1. ניקוי רכיבים ראשיים (כמו קודם)
+        var myCollider = GetComponent<Collider>();
+        if (myCollider != null) Destroy(myCollider);
+
+        var myRotator = GetComponent("ARObjectRotator") as MonoBehaviour;
+        if (myRotator != null) Destroy(myRotator);
+
+        var myRb = GetComponent<Rigidbody>();
+        if (myRb != null) Destroy(myRb);
+
+        // 2. טיפול בילד עם האנימציה (Step_05_Final)
+        Animator childAnim = GetComponentInChildren<Animator>();
+        if (childAnim != null)
+        {
+            Transform t = childAnim.transform;
+
+            // --- עדכון נתונים כפוי (לפי התמונה ששלחת) ---
+            // משתמשים ב-Local כי זה ביחס לאבא
+            t.localPosition = new Vector3(1.3713f, -0.7999f, -0.0738f);
+            t.localRotation = Quaternion.Euler(180f, 90f, 90f);
+            t.localScale = new Vector3(1f, 1f, 1.042f);
+
+            // עכשיו שהכל במקום - משמידים את האנימטור
+            Destroy(childAnim);
+        }
+
+        // --- התחלת הנהיגה ---
         isDriving = true;
 
         if (joystickUI != null)
             joystickUI.SetActive(true);
+
+        Debug.Log(TAG + "🚗 Test Drive Started! Transform fixed & Animator destroyed.");
     }
 
     public void StopTestDrive()
     {
         isDriving = false;
-
-        if (joystickUI != null)
-            joystickUI.SetActive(false);
+        if (joystickUI != null) joystickUI.SetActive(false);
     }
 
-    // פונקציות לאירועים מה-UI (EventTrigger)
-    public void DriveForward(bool pressed) => moveForward = pressed;
-    public void DriveBackward(bool pressed) => moveBackward = pressed;
-    public void TurnLeft(bool pressed) => turnLeft = pressed;
-    public void TurnRight(bool pressed) => turnRight = pressed;
+    // --- Events from UI ---
+
+    public void DriveForward(bool pressed)
+    {
+        Debug.Log($"{TAG} Button: Forward is {pressed}");
+        moveForward = pressed;
+    }
+
+    public void DriveBackward(bool pressed)
+    {
+        Debug.Log($"{TAG} Button: Backward is {pressed}");
+        moveBackward = pressed;
+    }
+
+    public void TurnLeft(bool pressed)
+    {
+        Debug.Log($"{TAG} Button: Left is {pressed}");
+        turnLeft = pressed;
+    }
+
+    public void TurnRight(bool pressed)
+    {
+        Debug.Log($"{TAG} Button: Right is {pressed}");
+        turnRight = pressed;
+    }
 }

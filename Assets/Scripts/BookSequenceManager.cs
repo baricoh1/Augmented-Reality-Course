@@ -381,25 +381,27 @@ public class BookSequenceManager : MonoBehaviour
 
             // --- הפעלת נסיעת המבחן ---
             if (racecar != null)
+            {
                 racecar.StartTestDrive();
-
+                if (typewriter != null)
+                    typewriter.WriteText("");
+            }
         }
-
-
     }
 
-    IEnumerator FadeOutModel(GameObject model)
-    {
-        Vector3 originalScale = model.transform.localScale;
-        float t = 0;
-        while (t < 1)
+        IEnumerator FadeOutModel(GameObject model)
         {
-            t += Time.deltaTime / 0.5f;
-            model.transform.localScale = Vector3.Lerp(originalScale, Vector3.zero, t);
-            yield return null;
+            Vector3 originalScale = model.transform.localScale;
+            float t = 0;
+            while (t < 1)
+            {
+                t += Time.deltaTime / 0.5f;
+                model.transform.localScale = Vector3.Lerp(originalScale, Vector3.zero, t);
+                yield return null;
+            }
         }
-    }
 
-    public void OnNextButton() => _nextRequested = true;
-    public void OnBackButton() => _backRequested = true;
+        public void OnNextButton() => _nextRequested = true;
+        public void OnBackButton() => _backRequested = true;
+
 }
