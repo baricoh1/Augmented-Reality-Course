@@ -66,9 +66,6 @@ public class Racecar : MonoBehaviour
         var myRotator = GetComponent("ARObjectRotator") as MonoBehaviour;
         if (myRotator != null) Destroy(myRotator);
 
-        var myRb = GetComponent<Rigidbody>();
-        if (myRb != null) Destroy(myRb);
-
         // 2. טיפול בילד עם האנימציה (Step_05_Final)
         Animator childAnim = GetComponentInChildren<Animator>();
         if (childAnim != null)
