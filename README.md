@@ -1,7 +1,5 @@
 https://drive.google.com/drive/folders/1ZRE83kC4WPc7vGdoOvoUfW0TZRtZHyhY
 
-Folder Contents
-
 The folder includes three items:
 
 APK file – the installable build of the game.
